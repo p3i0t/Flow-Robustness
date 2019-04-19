@@ -63,7 +63,7 @@ def train(maf, optimizer, hps):
     np.random.seed(hps.seed)
 
     # Create log dir
-    logdir = os.path.abspath(hps.logdir) + "/"
+    logdir = os.path.abspath(hps.log_dir) + "/"
     if not os.path.exists(logdir):
         os.mkdir(logdir)
 
@@ -85,7 +85,9 @@ def train(maf, optimizer, hps):
             loglikelihood += -np.log(hps.n_bins) * n_pixels
 
             optimizer.zero_grad()
-            loglikelihood, u = maf(x)
+            log_probs, u = maf(x)
+
+            loglikelihood += log_probs
 
             # Generative loss
             bits_x = (- loglikelihood) / (np.log(2.) * n_pixels)  # bits per pixel
@@ -99,6 +101,8 @@ def train(maf, optimizer, hps):
         save_image(postprocess(x), os.path.join(hps.log_dir, 'maf_epoch{}_original.png'.format(epoch)))
         x_reverse = maf.reverse(u)
         save_image(postprocess(x_reverse), os.path.join(hps.log_dir, 'maf_epoch{}_reverse.png'.format(epoch)))
+        x_sample = maf.reverse(torch.randn(u.size()))
+        save_image(postprocess(x_sample), os.path.join(hps.log_dir, 'maf_epoch{}_sample.png'.format(epoch)))
 
         cur_bits_per_dim = np.mean(bits_list)
         print('Epoch {}, mean bits_per_dim: {:.4f}'.format(epoch, cur_bits_per_dim))

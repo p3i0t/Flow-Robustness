@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import math
 
-from NormalizingFlows.mades import GaussianMade
+from NormalizingFlows.mades import GaussianMadeBN
 
 
 class MaskedAutoregressiveFlow(nn.Module):
@@ -17,8 +17,7 @@ class MaskedAutoregressiveFlow(nn.Module):
         self.models = nn.ModuleList([])
         order = lambda ind: 'default' if ind == 0 else 'reverse'
         for i in range(n_mades):
-            # self.models.append(GaussianMadeBN(in_size, hidden_sizes, order(i)))
-            self.models.append(GaussianMade(in_size, hidden_sizes, order(i)))
+            self.models.append(GaussianMadeBN(in_size, hidden_sizes, order(i)))
 
     def forward(self, x):
         out = x
