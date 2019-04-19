@@ -101,7 +101,7 @@ def train(maf, optimizer, hps):
         save_image(postprocess(x), os.path.join(hps.log_dir, 'maf_epoch{}_original.png'.format(epoch)))
         x_reverse = maf.reverse(u)
         save_image(postprocess(x_reverse), os.path.join(hps.log_dir, 'maf_epoch{}_reverse.png'.format(epoch)))
-        x_sample = maf.reverse(torch.randn(u.size()))
+        x_sample = maf.reverse(torch.randn(u.size()).to(hps.device))
         save_image(postprocess(x_sample), os.path.join(hps.log_dir, 'maf_epoch{}_sample.png'.format(epoch)))
 
         cur_bits_per_dim = np.mean(bits_list)
