@@ -14,9 +14,6 @@ from torchvision import datasets, transforms, utils
 backends.cudnn.benchmark = True
 
 
-save_dir = 'pcnn_images'
-
-
 class MaskedConv2d(nn.Conv2d):
     def __init__(self, mask_type, *args, **kwargs):
         super(MaskedConv2d, self).__init__(*args, **kwargs)
@@ -64,7 +61,7 @@ def train(model, args):
             x = x.to(args.device)
             target = (x.data[:, 0] * 255).long().to(args.device)
             loss = F.cross_entropy(model(x), target)
-            err_tr.append(loss.data[0])
+            err_tr.append(loss.item())
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -78,15 +75,15 @@ def train(model, args):
         for x, y in train_loader:
             x = x.to(args.device)
             target = (x.data[:, 0] * 255).long().to(args.device)
-            loss = F.cross_entropy(model(input), target)
-            err_te.append(loss.data[0])
+            loss = F.cross_entropy(model(x), target)
+            err_te.append(loss.item())
         cuda.synchronize()
         time_te = time.time() - time_te
 
         if np.mean(err_tr) < optimal_loss:
             optimal_loss = np.mean(err_tr)
             print('==> new SOTA achieved, saving model ...')
-            torch.save(model.state_dict(), os.path.join(save_dir, '{}.pth'.format(model_name)))
+            torch.save(model.state_dict(), os.path.join(args.save_dir, '{}.pth'.format(model_name)))
 
         print('epoch={}; nll_tr={:.4f}; nll_te={:.4f}; time_tr={:.1f}s; time_te={:.1f}s'.format(
                 epoch, np.mean(err_tr), np.mean(err_te), time_tr, time_te))
@@ -105,7 +102,7 @@ def train(model, args):
 
 def translation_attack(model, args):
     model_name = 'pcnn_{}'.format(args.problem)
-    state_dict = torch.load(os.path.join(save_dir, '{}.pth'.format(model_name)),
+    state_dict = torch.load(os.path.join(args.save_dir, '{}.pth'.format(model_name)),
                             map_location=lambda storage, loc: storage)
     model.load_state_dict(state_dict)
 
@@ -114,16 +111,18 @@ def translation_attack(model, args):
 
     def f(x):
         target = (x.data[:, 0] * 255).long().to(args.device)
-        print('target ', target.size(), target)
-        print('out ', model(x).size(), model(x))
-        loss = F.cross_entropy(model(x), target, size_average=False)  # keep batch dim
+        loss = F.cross_entropy(model(x), target, reduction='mean')  # keep batch dim
         print('loss: ', loss.size(), loss)
         exit(0)
         return loss
 
     def eval_bits(data_loader):
         for batch_id, (x, y) in enumerate(data_loader):
+            x = x.to(args.device)
             bits = f(x)
+    
+    with torch.no_grad():
+        eval_bits(test_loader)
 
 
 
@@ -203,7 +202,7 @@ if __name__ == '__main__':
     # data I/O
     parser.add_argument('-i', '--data_dir', type=str,
                         default='data', help='Location for the dataset')
-    parser.add_argument('-o', '--save_dir', type=str, default='models',
+    parser.add_argument('-o', '--save_dir', type=str, default='logs',
                         help='Location for parameter checkpoints and samples')
     parser.add_argument('-p', '--problem', type=str,
                         default='mnist', help='Can be either cifar|mnist')
