@@ -236,7 +236,7 @@ if __name__ == '__main__':
                         help="use gradient attack")
     parser.add_argument("--translation_attack", action="store_true",
                         help="use translation attack")
-    parser.add_argument("--epochs", type=int, default=10,
+    parser.add_argument("--epochs", type=int, default=20,
                         help="Total number of training epochs")
     args = parser.parse_args()
 
