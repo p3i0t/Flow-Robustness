@@ -62,7 +62,7 @@ def train(glow, optimizer, hps):
     np.random.seed(hps.seed)
 
     # Create log dir
-    logdir = os.path.abspath(hps.logdir) + "/"
+    logdir = os.path.abspath(hps.log_dir) + "/"
     if not os.path.exists(logdir):
         os.mkdir(logdir)
 
@@ -165,16 +165,20 @@ def translation_attack(glow, hps):
     np.random.seed(hps.seed)
 
     suffix = '' if hps.class_id == -1 else '_{}'.format(hps.class_id)
-    checkpoint = torch.load(os.path.join('logs/', 'glow_{}{}.pth'.format(hps.problem, suffix))
+    checkpoint = torch.load(os.path.join(hps.log_dir, '{}_glow_{}{}.pth'.format(hps.coupling, hps.problem, suffix))
                             , map_location=lambda storage, loc: storage)
     glow.load_state_dict(checkpoint['model_state'])
 
-    dataset = get_dataset(dataset=hps.infer_problem, train=True, class_id=hps.class_id)
+    dataset = get_dataset(dataset=hps.problem, train=True, class_id=hps.class_id)
     train_loader = DataLoader(dataset=dataset, batch_size=hps.n_batch_test, shuffle=False)
-    test_set = get_dataset(dataset=hps.infer_problem, train=False, class_id=hps.class_id)
+    test_set = get_dataset(dataset=hps.problem, train=False, class_id=hps.class_id)
     test_loader = DataLoader(dataset=test_set, batch_size=hps.n_batch_test, shuffle=False)
     # infer_dataset = get_dataset(dataset=hps.infer_problem, train=False, class_id=hps.infer_class_id)
     # infer_loader = DataLoader(dataset=infer_dataset, batch_size=hps.n_batch_test, shuffle=False)
+
+    save_dir = os.path.join(hps.log_dir, 'translation')
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
 
     def f(x, y):
         loglikelihood = torch.zeros(x.size(0)).to(hps.device)
@@ -197,40 +201,39 @@ def translation_attack(glow, hps):
         x = up_shift(x, n_pixel)
         return x
 
-    def eval_bits(data_loader, left_pixel=None):
-        bits_list = []
+    def eval_bits(data_loader, hps, left_pixel=None):
+        pix = 0 if left_pixel is None else left_pixel
+        keys = ['{}_class{}_leftpixel{}'.format(hps.problem, i, pix) for i in range(hps.n_classes)]
+        bits_dict = {key: list() for key in keys}
+
         for batch_id, (x, y) in enumerate(data_loader):
             x = preprocess(x).to(hps.device)
             y = y.to(hps.device)
             if left_pixel:
                 x = left_shift(x, left_pixel)
-                x = up_shift(x, left_pixel)
+                if hps.problem == 'mnist':
+                    x = up_shift(x, left_pixel)
             bits_x, _ = f(x, y)
-            bits_list += list(bits_x.cpu().numpy())
-        return bits_list
+            for i in range(hps.n_classes):
+                bits_dict['{}_class{}_leftpixel{}'.format(hps.problem, i, pix)] += list(bits_x[y == i].cpu().numpy())
+        return bits_dict
 
     with torch.no_grad():
-        # train_bits = eval_bits(train_loader)
-        # left_train_bits_1 = eval_bits(train_loader, left_pixel=1)
-        # left_train_bits_3 = eval_bits(train_loader, left_pixel=3)
-        #
-        # test_bits = eval_bits(test_loader)
-        # left_test_bits_1 = eval_bits(test_loader, left_pixel=1)
-        # left_test_bits_3 = eval_bits(test_loader, left_pixel=3)
-        #
-        # bits_dict = {
-        #     # 'bits_train': train_bits,
-        #     #          'left_bits_train_1': left_train_bits_1,
-        #     #          'left_bits_train_3': left_train_bits_3,
-        #              'bits_test': test_bits,
-        #              'left_bits_test_1': left_test_bits_1,
-        #              'left_bits_test_3': left_test_bits_3,
-        #              }
-        # suffix = '' if hps.class_id == -1 else '_{}'.format(hps.class_id)
-        # torch.save(bits_dict, 'logs/glow_{}{}_bits.pth'.format(hps.problem, suffix))
+        # Evaluate on test set with different pixel shifts to left
+        bits_dict = {}
+        bits = eval_bits(test_loader, hps)
+        bits_dict.update(bits)
 
+        left_bits_1 = eval_bits(test_loader, hps, left_pixel=1)
+        left_bits_2 = eval_bits(test_loader, hps, left_pixel=2)
+        bits_dict.update(left_bits_1)
+        bits_dict.update(left_bits_2)
+
+        torch.save(bits_dict, os.path.join(save_dir, 'glow_{}_bits_dict.pth'.format(hps.problem)))
+
+        # Generate some samples.
         test_loader = DataLoader(dataset=test_set, batch_size=1, shuffle=False)
-        n_samples = 20
+        n_samples = 1
 
         for sample_id, (x, y) in enumerate(test_loader):
             if sample_id == n_samples:
@@ -239,17 +242,21 @@ def translation_attack(glow, hps):
             y = y.to(hps.device)
 
             bits_x, _ = f(x, y)
-            save_image(postprocess(x), os.path.join('logs/', '{}_original_{}_bpd[{:.4f}].png'.format(
+            save_image(postprocess(x), os.path.join(save_dir, '{}_original_{}_bpd[{:.4f}].png'.format(
                 hps.problem, sample_id, bits_x.cpu().item())))
 
             x = left_shift(x, n_pixel=1)
+            if hps.problem == 'mnist':
+                x = up_shift(x, n_pixel=1)
             bits_x, _ = f(x, y)
-            save_image(postprocess(x), os.path.join('logs/', '{}_lu1_{}_bpd[{:.4f}].png'.format(
+            save_image(postprocess(x), os.path.join(save_dir, '{}_l1_{}_bpd[{:.4f}].png'.format(
                 hps.problem, sample_id, bits_x.cpu().item())))
 
             x = left_shift(x, n_pixel=1)
+            if hps.problem == 'mnist':
+                x = up_shift(x, n_pixel=1)
             bits_x, _ = f(x, y)
-            save_image(postprocess(x), os.path.join('logs/', '{}_lu2_{}_bpd[{:.4f}].png'.format(
+            save_image(postprocess(x), os.path.join(save_dir, '{}_l2_{}_bpd[{:.4f}].png'.format(
                 hps.problem, sample_id, bits_x.cpu().item())))
 
 
@@ -259,14 +266,18 @@ def reverse_attack(glow, hps):
     np.random.seed(hps.seed)
 
     suffix = '' if hps.class_id == -1 else '_{}'.format(hps.class_id)
-    checkpoint = torch.load(os.path.join('logs/', 'glow_{}{}.pth'.format(hps.problem, suffix))
+    checkpoint = torch.load(os.path.join(hps.log_dir, '{}_glow_{}{}.pth'.format(hps.coupling, hps.problem, suffix))
                             , map_location=lambda storage, loc: storage)
     glow.load_state_dict(checkpoint['model_state'])
 
-    # test_set = get_dataset(dataset=hps.infer_problem, train=False, class_id=hps.infer_class_id)
-    # test_loader = DataLoader(dataset=test_set, batch_size=hps.n_batch_test, shuffle=False)
+    test_set = get_dataset(dataset=hps.problem, train=False, class_id=hps.class_id)
+    test_loader = DataLoader(dataset=test_set, batch_size=hps.n_batch_test, shuffle=False)
     # infer_dataset = get_dataset(dataset=hps.infer_problem, train=False, class_id=hps.infer_class_id)
     # infer_loader = DataLoader(dataset=infer_dataset, batch_size=hps.n_batch_test, shuffle=False)
+
+    save_dir = os.path.join(hps.log_dir, 'reverse')
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
 
     def f(x, y):
         loglikelihood = torch.zeros(x.size(0)).to(hps.device)
@@ -279,44 +290,52 @@ def reverse_attack(glow, hps):
         return bits_x, eps_list
 
     def zero_epses(eps_list, n_zeros=1):
+        "Zero the preceding n_zeros eps factors. "
         assert n_zeros < len(eps_list)
         for idx in range(n_zeros):
             eps_list[idx].zero_()
         return eps_list
-    #
-    # def eval_bits(data_loader):
-    #     bits_list = []
-    #     reverse_bits_list = []
-    #     for batch_id, (x, y) in enumerate(data_loader):
-    #         x = preprocess(x).to(hps.device)
-    #         y = y.to(hps.device)
-    #         bits, eps_list = f(x, y)
-    #         bits_list += list(bits.cpu().numpy())
-    #
-    #         zeroed_eps_list = zero_epses(eps_list, n_zeros=2)
-    #         x_reverse = glow.reverse(zeroed_eps_list, y)
-    #         reverse_bits, _ = f(x_reverse, y)
-    #         reverse_bits_list += list(reverse_bits.cpu().numpy())
-    #     return bits_list, reverse_bits_list
-    #
-    # with torch.no_grad():
-    #     test_bits, zeroed_test_bits = eval_bits(test_loader)
-    #     print('test mean', np.mean(test_bits))
-    #     print('zeroed test mean', np.mean(zeroed_test_bits))
-    #     exit(0)
-    #     bits_dict = {
-    #                  'bits': test_bits,
-    #                  'zeroed_bits': zeroed_test_bits,
-    #                  }
-    #     suffix = '' if hps.class_id == -1 else '_{}'.format(hps.class_id)
-    #     torch.save(bits_dict, 'logs/glow_{}{}_attack2.pth'.format(hps.problem, suffix))
 
-    # out-distribution evaluation
-    in_class_id = hps.infer_class_id
-    in_set = get_dataset(dataset='fashion', train=False, class_id=in_class_id)
-    in_loader = DataLoader(dataset=in_set, batch_size=hps.n_batch_test, shuffle=False)
-    out_set = get_dataset(dataset='mnist', train=False, class_id=-1)
-    out_loader = DataLoader(dataset=out_set, batch_size=hps.n_batch_test, shuffle=False)
+    def eval_bits(data_loader, hps):
+        keys = ['{}_class{}_zero{}'.format(hps.problem, i, j) for i in range(hps.n_classes) for j in range(3)]
+        bits_dict = {key: list() for key in keys}
+
+        def remove_nan(x):
+            return x[~np.isnan(x)]
+
+        for batch_id, (x, y) in enumerate(data_loader):
+            x = preprocess(x).to(hps.device)
+            y = y.to(hps.device)
+            bits, eps_list = f(x, y)
+            for i in range(hps.n_classes):
+                bits_dict['{}_class{}_zero0'.format(hps.problem, i)] += list(bits[y == i].cpu().numpy())
+
+            zeroed_eps_list = zero_epses(eps_list, n_zeros=1)
+            x_reverse = glow.reverse(zeroed_eps_list, y)
+            reverse_bits, eps_list = f(x_reverse, y)
+            for i in range(hps.n_classes):
+                bits_ = remove_nan(reverse_bits[y == i].cpu().numpy())
+                bits_dict['{}_class{}_zero1'.format(hps.problem, i)] += list(bits_)
+
+            zeroed_eps_list = zero_epses(eps_list, n_zeros=2)
+            x_reverse = glow.reverse(zeroed_eps_list, y)
+            reverse_bits, _ = f(x_reverse, y)
+            for i in range(hps.n_classes):
+                bits_ = remove_nan(reverse_bits[y == i].cpu().numpy())
+                bits_dict['{}_class{}_zero2'.format(hps.problem, i)] += list(bits_)
+
+        return bits_dict
+
+    with torch.no_grad():
+        bits_dict = eval_bits(test_loader, hps)
+        torch.save(bits_dict, os.path.join(save_dir, 'glow_{}_bits_dict.pth'.format(hps.problem)))
+
+    # # out-distribution evaluation
+    # in_class_id = hps.infer_class_id
+    # in_set = get_dataset(dataset='fashion', train=False, class_id=in_class_id)
+    # in_loader = DataLoader(dataset=in_set, batch_size=hps.n_batch_test, shuffle=False)
+    # out_set = get_dataset(dataset='mnist', train=False, class_id=-1)
+    # out_loader = DataLoader(dataset=out_set, batch_size=hps.n_batch_test, shuffle=False)
 
     # fixed_y = None
     # in_bits_list = []
@@ -353,39 +372,39 @@ def reverse_attack(glow, hps):
     # suffix = '_{}'.format(in_class_id)
     # torch.save(bits_dict, 'logs/glow_out_evaluation{}_attack2.pth'.format(suffix))
 
-    in_loader = DataLoader(dataset=in_set, batch_size=1, shuffle=False)
-    out_loader = DataLoader(dataset=out_set, batch_size=1, shuffle=False)
-
-    def sample(loader, mode='out'):
-        n_samples = 10
-        for sample_id, (x, y) in enumerate(loader):
-            if sample_id == n_samples:
-                break
-            x = preprocess(x).to(hps.device)
-            #y = y.to(hps.device)
-            y = torch.tensor([in_class_id]).long().to(hps.device)
-
-            bits_x, eps_list = f(x, y)
-            save_image(postprocess(x), os.path.join('logs/', 'out_evaluation_in{}_{}sample{}_original_bpd[{:.4f}].png'.format(
-                in_class_id, mode, sample_id, bits_x.cpu().item())))
-
-            eps_list_1 = zero_epses(eps_list, n_zeros=1)
-            x_reverse_1 = glow.reverse(eps_list_1, y)
-            bits_x_1, _ = f(x_reverse_1, y)
-            save_image(postprocess(x_reverse_1),
-                       os.path.join('logs/', 'out_evaluation_in{}_{}sample{}_zero1_bpd[{:.4f}].png'.format(
-                           in_class_id, mode, sample_id, bits_x_1.cpu().item())))
-
-            bits_x, eps_list = f(x, y)
-            eps_list_2 = zero_epses(eps_list, n_zeros=2)
-            x_reverse_2 = glow.reverse(eps_list_2, y)
-            bits_x_2, _ = f(x_reverse_2, y)
-            save_image(postprocess(x_reverse_2),
-                       os.path.join('logs/', 'out_evaluation_in{}_{}sample{}_zero2_bpd[{:.4f}].png'.format(
-                           in_class_id, mode, sample_id, bits_x_2.cpu().item())))
-
-    sample(in_loader, mode='in')
-    sample(out_loader, mode='out')
+    # in_loader = DataLoader(dataset=in_set, batch_size=1, shuffle=False)
+    # out_loader = DataLoader(dataset=out_set, batch_size=1, shuffle=False)
+    #
+    # def sample(loader, mode='out'):
+    #     n_samples = 10
+    #     for sample_id, (x, y) in enumerate(loader):
+    #         if sample_id == n_samples:
+    #             break
+    #         x = preprocess(x).to(hps.device)
+    #         #y = y.to(hps.device)
+    #         y = torch.tensor([in_class_id]).long().to(hps.device)
+    #
+    #         bits_x, eps_list = f(x, y)
+    #         save_image(postprocess(x), os.path.join('logs/', 'out_evaluation_in{}_{}sample{}_original_bpd[{:.4f}].png'.format(
+    #             in_class_id, mode, sample_id, bits_x.cpu().item())))
+    #
+    #         eps_list_1 = zero_epses(eps_list, n_zeros=1)
+    #         x_reverse_1 = glow.reverse(eps_list_1, y)
+    #         bits_x_1, _ = f(x_reverse_1, y)
+    #         save_image(postprocess(x_reverse_1),
+    #                    os.path.join('logs/', 'out_evaluation_in{}_{}sample{}_zero1_bpd[{:.4f}].png'.format(
+    #                        in_class_id, mode, sample_id, bits_x_1.cpu().item())))
+    #
+    #         bits_x, eps_list = f(x, y)
+    #         eps_list_2 = zero_epses(eps_list, n_zeros=2)
+    #         x_reverse_2 = glow.reverse(eps_list_2, y)
+    #         bits_x_2, _ = f(x_reverse_2, y)
+    #         save_image(postprocess(x_reverse_2),
+    #                    os.path.join('logs/', 'out_evaluation_in{}_{}sample{}_zero2_bpd[{:.4f}].png'.format(
+    #                        in_class_id, mode, sample_id, bits_x_2.cpu().item())))
+    #
+    # sample(in_loader, mode='in')
+    # sample(out_loader, mode='out')
 
 
 def gradient_attack(glow, hps):
@@ -400,6 +419,10 @@ def gradient_attack(glow, hps):
 
     in_set = get_dataset(dataset=hps.problem, train=False, class_id=-1)
     in_loader = DataLoader(dataset=in_set, batch_size=1, shuffle=False)
+
+    save_dir = os.path.join(hps.log_dir, 'gradient')
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
 
     def f(x, y):
         loglikelihood = torch.zeros(x.size(0)).to(hps.device)
@@ -514,7 +537,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_batch_train", type=int,
                         default=64, help="Minibatch size")
     parser.add_argument("--n_batch_test", type=int,
-                        default=50, help="Minibatch size")
+                        default=100, help="Minibatch size")
     parser.add_argument("--optimizer", type=str,
                         default="adamax", help="adam or adamax")
     parser.add_argument("--lr", type=float, default=0.0002,
@@ -553,7 +576,7 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=0, help="Random seed")
     parser.add_argument("--permutation", type=str, default='conv1x1',
                         help="Type of flow. 0=reverse (realnvp), 1=shuffle, 2=invconv (ours)")
-    parser.add_argument("--coupling", type=str, default='additive',
+    parser.add_argument("--coupling", type=str, default='affine',
                         help="Coupling type: 0=additive, 1=affine")
 
     hps = parser.parse_args()  # So error if typo
