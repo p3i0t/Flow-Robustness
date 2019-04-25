@@ -327,8 +327,44 @@ def reverse_attack(glow, hps):
         return bits_dict
 
     with torch.no_grad():
-        bits_dict = eval_bits(test_loader, hps)
-        torch.save(bits_dict, os.path.join(save_dir, 'glow_{}_bits_dict.pth'.format(hps.problem)))
+        # bits_dict = eval_bits(test_loader, hps)
+        # torch.save(bits_dict, os.path.join(save_dir, 'glow_{}_bits_dict.pth'.format(hps.problem)))
+
+        test_loader = DataLoader(dataset=test_set, batch_size=1, shuffle=False)
+
+        n_samples = 5
+
+        transfer_dict = {}
+        for batch_id, (x, y) in enumerate(test_loader):
+            if batch_id == n_samples:
+                break
+
+            x = preprocess(x).to(hps.device)
+            y = y.to(hps.device)
+            bits, eps_list = f(x, y)
+
+            save_image(postprocess(x), os.path.join(save_dir, '{}_original_{}_bpd[{:.4f}].png'.format(
+                hps.problem, batch_id, bits.cpu().item())))
+
+            zeroed_eps_list = zero_epses(eps_list, n_zeros=1)
+            x_reverse = glow.reverse(zeroed_eps_list, y)
+            reverse_bits, eps_list = f(x_reverse, y)
+
+            save_image(postprocess(x_reverse), os.path.join(save_dir, '{}_zero1_{}_bpd[{:.4f}].png'.format(
+                hps.problem, batch_id, reverse_bits.cpu().item())))
+
+            zeroed_eps_list = zero_epses(eps_list, n_zeros=2)
+            x_reverse_ = glow.reverse(zeroed_eps_list, y)
+            reverse_bits_, _ = f(x_reverse_, y)
+            save_image(postprocess(x_reverse_), os.path.join(save_dir, '{}_zero2_{}_bpd[{:.4f}].png'.format(
+                hps.problem, batch_id, reverse_bits_.cpu().item())))
+
+            transfer_x = torch.cat([x, x_reverse, x_reverse_], dim=1)
+            transfer_y = torch.cat([bits, reverse_bits, reverse_bits_])
+            transfer_dict['x{}'.format(batch_id)] = transfer_x
+            transfer_dict['y{}'.format(batch_id)] = transfer_y
+
+        torch.save(transfer_dict, os.path.join(save_dir, 'transfer_xy.pth'))
 
     # # out-distribution evaluation
     # in_class_id = hps.infer_class_id
@@ -376,7 +412,7 @@ def reverse_attack(glow, hps):
     # out_loader = DataLoader(dataset=out_set, batch_size=1, shuffle=False)
     #
     # def sample(loader, mode='out'):
-    #     n_samples = 10
+    #     n_samples = 5
     #     for sample_id, (x, y) in enumerate(loader):
     #         if sample_id == n_samples:
     #             break
