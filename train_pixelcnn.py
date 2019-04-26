@@ -35,34 +35,32 @@ class MaskedConv2d(nn.Conv2d):
 
 def get_loader(args):
     dir = os.path.join(args.data_dir, args.problem)
+
+    if args.image_size == 32:
+        transform = transforms.Compose([
+                transforms.Resize((32, 32)),
+                transforms.ToTensor(),
+            ])
+    elif args.image_size == 28:
+        transform = transforms.ToTensor()
+
     if args.problem == 'mnist':
-        tr = data.DataLoader(datasets.MNIST(dir, train=True, download=True, transform=transforms.Compose([
-                                       transforms.Resize((32, 32)),
-                                       transforms.ToTensor(),
-                                   ])),
+        tr = data.DataLoader(datasets.MNIST(dir, train=True, download=True, transform=transform),
                              batch_size=args.train_batch_size, shuffle=True, num_workers=1, pin_memory=True)
-        te = data.DataLoader(datasets.MNIST(dir, train=False, download=True, transform=transforms.Compose([
-                                       transforms.Resize((32, 32)),
-                                       transforms.ToTensor(),
-                                   ])),
+        te = data.DataLoader(datasets.MNIST(dir, train=False, download=True, transform=transform),
                              batch_size=args.test_batch_size, shuffle=False, num_workers=1, pin_memory=True)
+
     elif args.problem == 'fashion':
-        tr = data.DataLoader(datasets.FashionMNIST(dir, train=True, download=True, transform=transforms.Compose([
-                                       transforms.Resize((32, 32)),
-                                       transforms.ToTensor(),
-                                   ])),
+        tr = data.DataLoader(datasets.FashionMNIST(dir, train=True, download=True, transform=transform),
                              batch_size=args.train_batch_size, shuffle=True, num_workers=1, pin_memory=True)
-        te = data.DataLoader(datasets.FashionMNIST(dir, train=False, download=True, transform=transforms.Compose([
-                                       transforms.Resize((32, 32)),
-                                       transforms.ToTensor(),
-                                   ])),
+        te = data.DataLoader(datasets.FashionMNIST(dir, train=False, download=True, transform=transform),
                              batch_size=args.test_batch_size, shuffle=False, num_workers=1, pin_memory=True)
 
     return tr, te
 
 
 def train(model, args):
-    model_name = 'pcnn_{}'.format(args.problem)
+    model_name = 'pcnn_{}_pixel{}'.format(args.problem, args.image_size)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
@@ -117,7 +115,7 @@ def train(model, args):
 
 
 def translation_attack(model, args):
-    model_name = 'pcnn_{}'.format(args.problem)
+    model_name = 'pcnn_{}_pixel{}'.format(args.problem, args.image_size)
     state_dict = torch.load(os.path.join(args.log_dir, '{}.pth'.format(model_name)),
                             map_location=lambda storage, loc: storage)
     model.load_state_dict(state_dict)
@@ -204,7 +202,8 @@ def translation_attack(model, args):
 
 
 def transfer_attack(model, args):
-    model_name = 'pcnn_{}'.format(args.problem)
+    model_name = 'pcnn_{}_pixel{}'.format(args.problem, args.image_size)
+
     state_dict = torch.load(os.path.join(args.log_dir, '{}.pth'.format(model_name)),
                             map_location=lambda storage, loc: storage)
     model.load_state_dict(state_dict)
@@ -228,7 +227,7 @@ def transfer_attack(model, args):
 
 
 def gradient_attack(model, args):
-    model_name = 'pcnn_{}'.format(args.problem)
+    model_name = 'pcnn_{}_pixel{}'.format(args.problem, args.image_size)
     state_dict = torch.load(os.path.join(args.log_dir, '{}.pth'.format(model_name)),
                             map_location=lambda storage, loc: storage)
     model.load_state_dict(state_dict)
@@ -351,6 +350,10 @@ if __name__ == '__main__':
                         help="use transfer attack")
     parser.add_argument("--epochs", type=int, default=20,
                         help="Total number of training epochs")
+
+    parser.add_argument("--image_size", type=int, default=28,
+                        help="Image size: 28 or 32")
+
     args = parser.parse_args()
 
     # reproducibility
