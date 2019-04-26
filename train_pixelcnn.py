@@ -122,7 +122,7 @@ def translation_attack(model, args):
                             map_location=lambda storage, loc: storage)
     model.load_state_dict(state_dict)
 
-    args.test_batch_size = 1
+    #args.test_batch_size = 1
     train_loader, test_loader = get_loader(args)
 
     save_dir = os.path.join(args.log_dir, 'translation')
@@ -130,6 +130,7 @@ def translation_attack(model, args):
         os.makedirs(save_dir)
 
     def f(x):
+        x = torch.clamp(x, 0., 1.)
         target = (x.data[:, 0] * 255).long().to(args.device)
         loss = F.cross_entropy(model(x), target, reduction='mean')  # keep batch dim
         return loss.item() / np.log(2)
@@ -156,15 +157,15 @@ def translation_attack(model, args):
 
             # shift 1 pixel
             x = left_shift(x, n_pixel=1)
-            if args.problem == 'mnist':
-                x = up_shift(x, n_pixel=1)
+            #if args.problem == 'mnist':
+            #    x = up_shift(x, n_pixel=1)
             bits = f(x)
             bits_dict['{}_class{}_leftpixel1'.format(args.problem, y.item())].append(bits)
 
             # shift 2 pixels
             x = left_shift(x, n_pixel=1)
-            if args.problem == 'mnist':
-                x = up_shift(x, n_pixel=1)
+            #if args.problem == 'mnist':
+            #    x = up_shift(x, n_pixel=1)
             bits = f(x)
             bits_dict['{}_class{}_leftpixel2'.format(args.problem, y.item())].append(bits)
         return bits_dict
@@ -173,7 +174,7 @@ def translation_attack(model, args):
         # bits_dict = eval_bits(test_loader)
         # torch.save(bits_dict, os.path.join(save_dir, 'pixelcnn_{}_bits_dict.pth'.format(args.problem)))
 
-        n_samples = 2
+        n_samples = 5 
 
         for sample_id, (x, y) in enumerate(test_loader):
             if sample_id == n_samples:
@@ -181,20 +182,23 @@ def translation_attack(model, args):
             x = x.to(args.device)
 
             bits_x = f(x)
+            print('bits_x ', bits_x)
             save_image(x, os.path.join(save_dir, '{}_original_{}_bpd[{:.4f}].png'.format(
                 args.problem, sample_id, bits_x)))
 
             x = left_shift(x, n_pixel=1)
-            if args.problem == 'mnist':
-                x = up_shift(x, n_pixel=1)
+            #if args.problem == 'mnist':
+            #    x = up_shift(x, n_pixel=1)
             bits_x = f(x)
+            print('bits_x ', bits_x)
             save_image(x, os.path.join(save_dir, '{}_l1_{}_bpd[{:.4f}].png'.format(
                 args.problem, sample_id, bits_x)))
 
             x = left_shift(x, n_pixel=1)
-            if args.problem == 'mnist':
-                x = up_shift(x, n_pixel=1)
+            #if args.problem == 'mnist':
+            #    x = up_shift(x, n_pixel=1)
             bits_x = f(x)
+            print('bits_x ', bits_x)
             save_image(x, os.path.join(save_dir, '{}_l2_{}_bpd[{:.4f}].png'.format(
                 args.problem, sample_id, bits_x)))
 
@@ -210,29 +214,36 @@ def transfer_attack(model, args):
     transfer_dict = torch.load(os.path.join(reverse_dir, 'transfer_xy.pth'))
 
     def f(x):
+        x = torch.clamp(x, 0., 1.)
         target = (x.data[:, 0] * 255).long().to(args.device)
         loss = F.cross_entropy(model(x), target, reduction='mean')  # keep batch dim
-        return loss.item() / np.log(2)
+        return loss.cpu().item() / np.log(2)
 
     for batch_id in range(5):
         x, y = transfer_dict['x{}'.format(batch_id)], transfer_dict['y{}'.format(batch_id)]
         for i in range(x.size(0)):
-            bits = f(x[i:i + 1])
-            print('pixelcnn bits: {:.4f}, glow bits'.format(bits, y[i:i+1].item()))
+            bits = f(x[i].unsqueeze(dim=0))
+            #bits = f(x[i:i + 1])
+            print('pixelcnn bits: {:.4f}, glow bits: {:.4f}'.format(bits, y[i:i+1].item()))
 
 
 def gradient_attack(model, args):
     model_name = 'pcnn_{}'.format(args.problem)
-    state_dict = torch.load(os.path.join(save_dir, '{}.pth'.format(model_name)),
+    state_dict = torch.load(os.path.join(args.log_dir, '{}.pth'.format(model_name)),
                             map_location=lambda storage, loc: storage)
     model.load_state_dict(state_dict)
 
-    args.batch_size = 1
+    args.test_batch_size = 1
     train_loader, test_loader = get_loader(args)
 
+    save_dir = os.path.join(args.log_dir, 'gradient')
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
     def f(x):
+        x = torch.clamp(x, 0., 1.)
         target = (x.data[:, 0] * 255).long().to(args.device)
-        loss = F.cross_entropy(model(input), target)
+        loss = F.cross_entropy(model(x), target)
 
         grad = torch.autograd.grad(outputs=loss,
                                    inputs=x,
@@ -242,17 +253,17 @@ def gradient_attack(model, args):
                                    only_inputs=True)[0]
         return loss.item(), grad
 
-    n_iterations = 10
+    n_iterations = 5 
     step = 1e-3
 
     mode = 'descent'
-    n_samples = 1
+    n_samples = 6 
 
     for batch_id, (x, y) in enumerate(test_loader):
         if batch_id == n_samples:
             break
 
-        mask = (x < 0.5).to(args.device)
+        mask = (x < 0.4).to(args.device)
         x.requires_grad = True
         x = x.to(args.device)
         x_original = x

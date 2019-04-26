@@ -359,7 +359,7 @@ def reverse_attack(glow, hps):
             save_image(postprocess(x_reverse_), os.path.join(save_dir, '{}_zero2_{}_bpd[{:.4f}].png'.format(
                 hps.problem, batch_id, reverse_bits_.cpu().item())))
 
-            transfer_x = torch.cat([x, x_reverse, x_reverse_], dim=1)
+            transfer_x = torch.cat([x, x_reverse, x_reverse_], dim=0)
             transfer_y = torch.cat([bits, reverse_bits, reverse_bits_])
             transfer_dict['x{}'.format(batch_id)] = transfer_x
             transfer_dict['y{}'.format(batch_id)] = transfer_y
