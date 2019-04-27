@@ -10,6 +10,7 @@ from torchvision import datasets, transforms, utils
 from NormalizingFlows.pixelcnn_utils import discretized_mix_logistic_loss, discretized_mix_logistic_loss_1d, \
     sample_from_discretized_mix_logistic, sample_from_discretized_mix_logistic_1d
 from NormalizingFlows.pixelcnn import PixelCNN
+from torch.utils.data import DataLoader
 
 import numpy as np
 
@@ -36,7 +37,9 @@ def sample(model, args):
 def train(model, args):
     model_name = 'pixelcnn_{}'.format(args.problem)
 
-    train_loader, test_loader, loss_op, sample_op = get_loader_ops(args)
+    train_set, test_set, loss_op, sample_op = get_loader_ops(args)
+    train_loader = DataLoader(dataset=train_set, batch_size=args.batch_size, shuffle=True)
+    test_loader = DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=True)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=1, gamma=args.lr_decay)
@@ -53,7 +56,7 @@ def train(model, args):
 
     optimal_bpd = 1e4
 
-    for epoch in range(args.max_epochs):
+    for epoch in range(args.epochs):
         model.train()
         for batch_idx, (x, _) in enumerate(train_loader):
             x.requires_grad = True
@@ -63,8 +66,6 @@ def train(model, args):
             optimizer.zero_grad()
             bpd.backward()
             optimizer.step()
-            # if (batch_idx + 1) % 50 == 0:
-            #     print('bpd: {:.4f}'.format(bpd.item()))
 
         # decrease learning rate
         scheduler.step()
@@ -95,40 +96,27 @@ def train(model, args):
 
 
 def get_loader_ops(args):
-    kwargs = {'num_workers': 1, 'pin_memory': True, 'drop_last': True}
     ds_transforms = transforms.Compose([transforms.ToTensor(), rescaling])
 
-    if args.problem == 'mnist':
-        dir = os.path.join(args.data_dir, 'MNIST')
-        train_loader = torch.utils.data.DataLoader(datasets.MNIST(dir, download=True,
-                                                                  train=True, transform=ds_transforms),
-                                                   batch_size=args.batch_size,
-                                                   shuffle=True, **kwargs)
+    dir = os.path.join(args.data_dir, args.problem)
 
-        test_loader = torch.utils.data.DataLoader(datasets.MNIST(args.data_dir, train=False,
-                                                                 transform=ds_transforms), batch_size=args.batch_size,
-                                                  shuffle=False, **kwargs)
+    if args.problem == 'mnist':
+        train_set = datasets.MNIST(dir, download=True, train=True, transform=ds_transforms),
+        test_set = datasets.MNIST(dir, train=False, transform=ds_transforms)
 
         loss_op = lambda real, fake: discretized_mix_logistic_loss_1d(real, fake)
         sample_op = lambda x: sample_from_discretized_mix_logistic_1d(x, args.nr_logistic_mix)
 
     elif args.problem == 'fashion':
-        dir = os.path.join(args.data_dir, 'FashionMNIST')
-        train_loader = torch.utils.data.DataLoader(datasets.FashionMNIST(dir, download=True,
-                                                                  train=True, transform=ds_transforms),
-                                                   batch_size=args.batch_size,
-                                                   shuffle=True, **kwargs)
-
-        test_loader = torch.utils.data.DataLoader(datasets.MNIST(args.data_dir, train=False,
-                                                                 transform=ds_transforms), batch_size=args.batch_size,
-                                                  shuffle=False, **kwargs)
+        train_set = datasets.FashionMNIST(dir, download=True, train=True, transform=ds_transforms),
+        test_set = datasets.FashionMNIST(dir, train=False, transform=ds_transforms)
 
         loss_op = lambda real, fake: discretized_mix_logistic_loss_1d(real, fake)
         sample_op = lambda x: sample_from_discretized_mix_logistic_1d(x, args.nr_logistic_mix)
     else:
         raise Exception('{} dataset not in [mnist, fashion]'.format(args.dataset))
 
-    return train_loader, test_loader, loss_op, sample_op
+    return train_set, test_set, loss_op, sample_op
 
 
 def translation_attack(model, args):
@@ -139,7 +127,9 @@ def translation_attack(model, args):
     model_name = 'pixelcnn_{}'.format(args.problem)
 
     args.batch_size = 1
-    train_loader, test_loader, loss_op, sample_op = get_loader_ops(args)
+    train_set, test_set, loss_op, sample_op = get_loader_ops(args)
+    train_loader = DataLoader(dataset=train_set, batch_size=args.batch_size, shuffle=True)
+    test_loader = DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=True)
 
     save_dir = os.path.join(args.log_dir, 'translation')
     if not os.path.exists(save_dir):
@@ -148,13 +138,6 @@ def translation_attack(model, args):
     check_point = torch.load(os.path.join(args.log_dir, '{}.pth'.format(model_name)),
                              map_location=lambda storage, loc: storage)
     model.load_state_dict(check_point['state_dict'])
-
-    # dataset = get_dataset(dataset=args.infer_problem, train=True, class_id=args.class_id)
-    # train_loader = DataLoader(dataset=dataset, batch_size=args.n_batch_test, shuffle=False)
-    # test_set = get_dataset(dataset=args.infer_problem, train=False, class_id=args.class_id)
-    # test_loader = DataLoader(dataset=test_set, batch_size=args.n_batch_test, shuffle=False)
-    # infer_dataset = get_dataset(dataset=args.infer_problem, train=False, class_id=args.infer_class_id)
-    # infer_loader = DataLoader(dataset=infer_dataset, batch_size=args.n_batch_test, shuffle=False)
 
     deno = args.batch_size * np.prod(args.obs) * np.log(2.)
 
@@ -181,6 +164,7 @@ def translation_attack(model, args):
         bits_dict = {key: list() for key in keys}
 
         for batch_id, (x, y) in enumerate(data_loader):
+            #x = rescaling_inv(x).to(args.device)
             x = rescaling_inv(x).to(args.device)
             y = y.to(args.device)
             if left_pixel:
@@ -204,8 +188,6 @@ def translation_attack(model, args):
 
         torch.save(bits_dict, os.path.join(save_dir, 'pcnn_{}_bits_dict.pth'.format(args.problem)))
 
-        args.batch_size = 1
-        train_loader, test_loader, loss_op, sample_op = get_loader_ops(args)
         n_samples = 4
 
         for sample_id, (x, y) in enumerate(test_loader):
@@ -216,17 +198,17 @@ def translation_attack(model, args):
             y = y.to(args.device)
 
             bits_x = f(x)
-            utils.save_image(rescaling_inv(x), os.path.join(save_dir, '{}_original_{}_bpd[{:.4f}].png'.format(
+            utils.save_image(rescaling_inv(x), os.path.join(save_dir, 'pcnn_{}_original_{}_bpd[{:.3f}].png'.format(
                 args.problem, sample_id, bits_x.cpu().item())))
 
             x = left_shift(x, n_pixel=1)
             bits_x = f(x)
-            utils.save_image(rescaling_inv(x), os.path.join(save_dir, '{}_l1_{}_bpd[{:.4f}].png'.format(
+            utils.save_image(rescaling_inv(x), os.path.join(save_dir, 'pcnn_{}_l1_{}_bpd[{:.3f}].png'.format(
                 args.problem, sample_id, bits_x.cpu().item())))
 
             x = left_shift(x, n_pixel=1)
             bits_x = f(x)
-            utils.save_image(rescaling_inv(x), os.path.join(save_dir, '{}_l2_{}_bpd[{:.4f}].png'.format(
+            utils.save_image(rescaling_inv(x), os.path.join(save_dir, 'pcnn_{}_l2_{}_bpd[{:.3f}].png'.format(
                 args.problem, sample_id, bits_x.cpu().item())))
 
 
@@ -282,11 +264,11 @@ def gradient_attack(model, args):
                 print('original image bpd: {:.4f}'.format(bpd))
                 utils.save_image(rescaling_inv(x),
                            os.path.join(save_dir,
-                                        'pixelcnn_{}_original_{}_bpd[{:.2f}].png'.format(args.problem, batch_id, bpd)))
+                                        'pixelcnn_{}_original_{}_bpd[{:.3f}].png'.format(args.problem, batch_id, bpd)))
             x = x + step * x_grad
         print('gradient bpd: {:.4f}'.format(bpd))
         utils.save_image(rescaling_inv(x),
-                   os.path.join(save_dir, 'pixelcnn_{}_gradient{}_bpd[{:.2f}].png'.format(args.problem, batch_id, bpd)))
+                   os.path.join(save_dir, 'pixelcnn_{}_gradient{}_bpd[{:.3f}].png'.format(args.problem, batch_id, bpd)))
 
         diff = x - x_original
         diff *= 1000
@@ -301,7 +283,7 @@ def gradient_attack(model, args):
         print('gradient bpd: {:.4f}'.format(bpd))
         utils.save_image(rescaling_inv(x),
                    os.path.join(save_dir,
-                                'pixelcnn_{}_mask{}_bpd[{:.2f}].png'.format(args.problem, batch_id, bpd)))
+                                'pixelcnn_{}_mask{}_bpd[{:.3f}].png'.format(args.problem, batch_id, bpd)))
 
         diff = x - x_original
         diff *= 1000
@@ -323,8 +305,7 @@ if __name__ == '__main__':
     #                     help='how many iterations between print statements')
     parser.add_argument('--save_interval', type=int, default=1,
                         help='Every how many epochs to write checkpoint/samples?')
-    parser.add_argument('-r', '--load_params', type=str, default=None,
-                        help='Restore training from previous model checkpoint?')
+
     # model
     parser.add_argument('--nr_resnet', type=int, default=2,
                         help='Number of residual blocks per stage of the model')
@@ -338,8 +319,8 @@ if __name__ == '__main__':
                         help='Learning rate decay, applied every step of the optimization')
     parser.add_argument('--batch_size', type=int, default=64,
                         help='Batch size during training per GPU')
-    parser.add_argument('-x', '--max_epochs', type=int,
-                        default=5000, help='How many epochs to run in total?')
+    parser.add_argument('--epochs', type=int,
+                        default=10, help='How many epochs to run in total?')
     parser.add_argument('--seed', type=int, default=123,
                         help='Random seed to use')
     parser.add_argument('--no-cuda', action='store_true', default=False,
