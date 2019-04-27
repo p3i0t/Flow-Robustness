@@ -246,7 +246,7 @@ def gradient_attack(model, args):
         return bpd.item(), grad
 
     n_iterations = 10
-    step = 1e-3
+    step = 1e-2
 
     n_samples = 4
 
@@ -273,14 +273,15 @@ def gradient_attack(model, args):
         utils.save_image(rescaling_inv(x),
                    os.path.join(save_dir, 'pixelcnn_{}_gradient{}_bpd[{:.3f}].png'.format(args.problem, batch_id, bpd)))
 
-        diff = x - x_original
-        diff *= 1000
-        utils.save_image(diff,
-                         os.path.join(save_dir, 'pixelcnn_{}_noise_{}.png'.
-                                      format(args.problem, batch_id)), normalize=True)
+        # diff = x - x_original
+        # diff *= 1000
+        # utils.save_image(diff,
+        #                  os.path.join(save_dir, 'pixelcnn_{}_noise_{}.png'.
+        #                               format(args.problem, batch_id)), normalize=True)
 
         x = x_original
         for i in range(n_iterations):
+            bpd, x_grad = f(x)
             x = x + step * mask.float() * x_grad
 
         print('gradient bpd: {:.4f}'.format(bpd))
@@ -288,11 +289,21 @@ def gradient_attack(model, args):
                    os.path.join(save_dir,
                                 'pixelcnn_{}_mask{}_bpd[{:.3f}].png'.format(args.problem, batch_id, bpd)))
 
-        diff = x - x_original
-        diff *= 1000
-        utils.save_image(diff,
-                         os.path.join(save_dir, 'pixelcnn_{}_mask_noise_{}.png'.
-                                      format(args.problem, batch_id)), normalize=True)
+        x = x_original
+        x = x + step * mask.float() * torch.randn(x_grad.size())   # random noise
+        bpd, x_grad = f(x)
+        print('gradient bpd: {:.4f}'.format(bpd))
+        utils.save_image(rescaling_inv(x),
+                         os.path.join(save_dir,
+                                      'pixelcnn_{}_randnoise_mask{}_bpd[{:.3f}].png'.format(args.problem, batch_id, bpd)))
+
+
+
+        # diff = x - x_original
+        # diff *= 1000
+        # utils.save_image(diff,
+        #                  os.path.join(save_dir, 'pixelcnn_{}_mask_noise_{}.png'.
+        #                               format(args.problem, batch_id)), normalize=True)
 
 
 if __name__ == '__main__':
