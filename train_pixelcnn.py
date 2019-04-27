@@ -300,7 +300,7 @@ if __name__ == '__main__':
     # data I/O
     parser.add_argument('--data_dir', type=str,
                         default='data', help='Location for the dataset')
-    parser.add_argument('--log_dir', type=str, default='log',
+    parser.add_argument('--log_dir', type=str, default='logs',
                         help='Location for parameter checkpoints and samples')
     parser.add_argument('--problem', type=str,
                         default='mnist', help='Can be either cifar|mnist')
@@ -310,17 +310,17 @@ if __name__ == '__main__':
                         help='Every how many epochs to write checkpoint/samples?')
 
     # model
-    parser.add_argument('--nr_resnet', type=int, default=2,
+    parser.add_argument('--nr_resnet', type=int, default=1,
                         help='Number of residual blocks per stage of the model')
-    parser.add_argument('--nr_filters', type=int, default=100,
+    parser.add_argument('--nr_filters', type=int, default=20,
                         help='Number of filters to use across the model. Higher = larger model.')
-    parser.add_argument('--nr_logistic_mix', type=int, default=3,
+    parser.add_argument('--nr_logistic_mix', type=int, default=2,
                         help='Number of logistic components in the mixture. Higher = more flexible model')
     parser.add_argument('--lr', type=float,
                         default=0.0002, help='Base learning rate')
     parser.add_argument('--lr_decay', type=float, default=0.999995,
                         help='Learning rate decay, applied every step of the optimization')
-    parser.add_argument('--batch_size', type=int, default=64,
+    parser.add_argument('--batch_size', type=int, default=100,
                         help='Batch size during training per GPU')
     parser.add_argument('--epochs', type=int,
                         default=10, help='How many epochs to run in total?')
