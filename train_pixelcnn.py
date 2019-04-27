@@ -42,15 +42,6 @@ def train(model, args):
     train_loader = DataLoader(dataset=train_set, batch_size=args.batch_size, shuffle=True)
     test_loader = DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=True)
 
-
-    print(train_set[0])
-    print(train_set[1])
-    print(train_set)
-    # for (x, y) in train_loader:
-    #     print(x.size())
-
-    exit(0)
-
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=1, gamma=args.lr_decay)
 
