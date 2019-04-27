@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from NormalizingFlows.modules import ConStepFlow, StepFlow, SqueezeLayer, Split2d, ConFinalPrior
+from NormalizingFlows.glow_submodules.modules import StepFlow, SqueezeLayer, Split2d, ConFinalPrior
 
 
 class ConGlow(nn.Module):

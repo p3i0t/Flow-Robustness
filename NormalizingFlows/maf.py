@@ -1,8 +1,9 @@
-import torch
-import torch.nn as nn
 import math
 
-from NormalizingFlows.mades import GaussianMadeBN
+import torch
+import torch.nn as nn
+
+from NormalizingFlows.made_submodules.mades import GaussianMadeBN
 
 
 class MaskedAutoregressiveFlow(nn.Module):

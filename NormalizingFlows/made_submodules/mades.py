@@ -1,11 +1,7 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.autograd import Variable as Var
-import math
 
-
-from NormalizingFlows.auto_regressive import AutoRegressiveNN
+from NormalizingFlows.made_submodules.auto_regressive import AutoRegressiveNN
 
 
 class GaussianMade(nn.Module):

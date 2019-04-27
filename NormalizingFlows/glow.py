@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from NormalizingFlows.modules import StepFlow, SqueezeLayer, Split2d, FinalPrior
+from NormalizingFlows.glow_submodules.modules import StepFlow, SqueezeLayer, Split2d, FinalPrior
 
 
 class Glow(nn.Module):

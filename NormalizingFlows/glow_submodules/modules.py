@@ -3,8 +3,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from NormalizingFlows.blocks import GaussianPrior, LinearZeros
-from NormalizingFlows.torchops import mean
+from NormalizingFlows.glow_submodules.blocks import GaussianPrior
+from NormalizingFlows.glow_submodules.torchops import mean
 
 
 def squeeze2d(x, factor=2):
