@@ -5,12 +5,13 @@ import torch
 
 import torch.optim as optim
 from torch.optim import lr_scheduler
+from torch.utils.data import DataLoader
 from torchvision import datasets, transforms, utils
 
 from NormalizingFlows.pixelcnn_utils import discretized_mix_logistic_loss, discretized_mix_logistic_loss_1d, \
     sample_from_discretized_mix_logistic, sample_from_discretized_mix_logistic_1d
 from NormalizingFlows.pixelcnn import PixelCNN
-from torch.utils.data import DataLoader
+
 
 import numpy as np
 
@@ -20,7 +21,7 @@ rescaling_inv = lambda x: .5 * x + .5
 
 
 def sample(model, args):
-    train_loader, test_loader, loss_op, sample_op = get_loader_ops(args)
+    train_loader, test_loader, loss_op, sample_op = get_dataset_ops(args)
     model.eval()
     data = torch.zeros(args.sample_batch_size, args.obs[0], args.obs[1], args.obs[2])
     data = data.to(args.device)
@@ -37,9 +38,18 @@ def sample(model, args):
 def train(model, args):
     model_name = 'pixelcnn_{}'.format(args.problem)
 
-    train_set, test_set, loss_op, sample_op = get_loader_ops(args)
+    train_set, test_set, loss_op, sample_op = get_dataset_ops(args)
     train_loader = DataLoader(dataset=train_set, batch_size=args.batch_size, shuffle=True)
     test_loader = DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=True)
+
+
+    print(train_set[0])
+    print(train_set[1])
+    print(train_set)
+    # for (x, y) in train_loader:
+    #     print(x.size())
+
+    exit(0)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     scheduler = lr_scheduler.StepLR(optimizer, step_size=1, gamma=args.lr_decay)
@@ -58,7 +68,7 @@ def train(model, args):
 
     for epoch in range(args.epochs):
         model.train()
-        for batch_idx, (x, _) in enumerate(train_loader):
+        for batch_idx, (x, y) in enumerate(train_loader):
             x.requires_grad = True
             x = x.to(args.device)
 
@@ -95,20 +105,20 @@ def train(model, args):
                              nrow=5, padding=0)
 
 
-def get_loader_ops(args):
+def get_dataset_ops(args):
     ds_transforms = transforms.Compose([transforms.ToTensor(), rescaling])
 
-    dir = os.path.join(args.data_dir, args.problem)
-
     if args.problem == 'mnist':
-        train_set = datasets.MNIST(dir, download=True, train=True, transform=ds_transforms),
+        dir = os.path.join(args.data_dir, 'MNIST')
+        train_set = datasets.MNIST(dir, download=True, train=True, transform=ds_transforms)
         test_set = datasets.MNIST(dir, train=False, transform=ds_transforms)
 
         loss_op = lambda real, fake: discretized_mix_logistic_loss_1d(real, fake)
         sample_op = lambda x: sample_from_discretized_mix_logistic_1d(x, args.nr_logistic_mix)
 
     elif args.problem == 'fashion':
-        train_set = datasets.FashionMNIST(dir, download=True, train=True, transform=ds_transforms),
+        dir = os.path.join(args.data_dir, 'FashionMNIST')
+        train_set = datasets.FashionMNIST(dir, download=True, train=True, transform=ds_transforms)
         test_set = datasets.FashionMNIST(dir, train=False, transform=ds_transforms)
 
         loss_op = lambda real, fake: discretized_mix_logistic_loss_1d(real, fake)
@@ -127,7 +137,7 @@ def translation_attack(model, args):
     model_name = 'pixelcnn_{}'.format(args.problem)
 
     args.batch_size = 1
-    train_set, test_set, loss_op, sample_op = get_loader_ops(args)
+    train_set, test_set, loss_op, sample_op = get_dataset_ops(args)
     train_loader = DataLoader(dataset=train_set, batch_size=args.batch_size, shuffle=True)
     test_loader = DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=True)
 
@@ -223,7 +233,9 @@ def gradient_attack(model, args):
     model.load_state_dict(check_point['state_dict'])
 
     args.batch_size = 1
-    train_loader, test_loader, loss_op, sample_op = get_loader_ops(args)
+    train_set, test_set, loss_op, sample_op = get_dataset_ops(args)
+    train_loader = DataLoader(dataset=train_set, batch_size=args.batch_size, shuffle=True)
+    test_loader = DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=True)
 
     save_dir = os.path.join(args.log_dir, 'gradient')
     if not os.path.exists(save_dir):
