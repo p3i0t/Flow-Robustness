@@ -97,7 +97,9 @@ def train(model, args):
 
 
 def get_dataset_ops(args):
-    ds_transforms = transforms.Compose([transforms.ToTensor(), rescaling])
+    ds_transforms = transforms.Compose([transforms.Resize((32, 32)),
+                                        transforms.ToTensor(),
+                                        rescaling])
 
     if args.problem == 'mnist':
         dir = os.path.join(args.data_dir, 'MNIST')
@@ -130,7 +132,7 @@ def translation_attack(model, args):
     args.batch_size = 1
     train_set, test_set, loss_op, sample_op = get_dataset_ops(args)
     train_loader = DataLoader(dataset=train_set, batch_size=args.batch_size, shuffle=True)
-    test_loader = DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=True)
+    test_loader = DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=False)
 
     save_dir = os.path.join(args.log_dir, 'translation')
     if not os.path.exists(save_dir):
@@ -166,7 +168,7 @@ def translation_attack(model, args):
 
         for batch_id, (x, y) in enumerate(data_loader):
             #x = rescaling_inv(x).to(args.device)
-            x = rescaling_inv(x).to(args.device)
+            x = x.to(args.device)
             y = y.to(args.device)
             if left_pixel:
                 x = left_shift(x, left_pixel)
@@ -189,13 +191,13 @@ def translation_attack(model, args):
 
         torch.save(bits_dict, os.path.join(save_dir, 'pcnn_{}_bits_dict.pth'.format(args.problem)))
 
-        n_samples = 4
+        n_samples = 2
 
         for sample_id, (x, y) in enumerate(test_loader):
             if sample_id == n_samples:
                 break
 
-            x = rescaling(x).to(args.device)
+            x = x.to(args.device)
             y = y.to(args.device)
 
             bits_x = f(x)
@@ -211,6 +213,76 @@ def translation_attack(model, args):
             bits_x = f(x)
             utils.save_image(rescaling_inv(x), os.path.join(save_dir, 'pcnn_{}_l2_{}_bpd[{:.3f}].png'.format(
                 args.problem, sample_id, bits_x.cpu().item())))
+
+
+def perturbation_attack(model, args):
+    model.eval()
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
+
+    model_name = 'pixelcnn_{}'.format(args.problem)
+
+    args.batch_size = 1
+    train_set, test_set, loss_op, sample_op = get_dataset_ops(args)
+    train_loader = DataLoader(dataset=train_set, batch_size=args.batch_size, shuffle=True)
+    test_loader = DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=False)
+
+    save_dir = os.path.join(args.log_dir, 'perturbation')
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
+    check_point = torch.load(os.path.join(args.log_dir, '{}.pth'.format(model_name)),
+                             map_location=lambda storage, loc: storage)
+    model.load_state_dict(check_point['state_dict'])
+
+    deno = args.batch_size * np.prod(args.obs) * np.log(2.)
+
+    def f(x):
+        output = model(x)
+        loss = loss_op(x, output)
+        bpd = loss / deno
+        return bpd.item()
+
+    n_samples = 3
+    for batch_id, (x, y) in enumerate(test_loader):
+        if batch_id == n_samples:
+            break
+        mask = (x < 0.4).to(args.device)
+
+        x = x.to(args.device)
+        y = y.to(args.device)
+
+        bpd = f(x)
+        print('original bpd: {:.3f}'.format(bpd))
+        utils.save_image(rescaling_inv(x),
+                         os.path.join(save_dir,
+                                      'pixelcnn_{}_original_{}_bpd[{:.3f}].png'.format(args.problem, batch_id, bpd)))
+
+        eps = 1e-3
+        noise = eps * torch.randn(x.size()).to(args.device)
+        x_perturb = x + noise
+        bpd = f(x_perturb)
+        print('noise bpd: {:.3f}'.format(bpd))
+        utils.save_image(rescaling_inv(x),
+                         os.path.join(save_dir,
+                                      'pixelcnn_{}_randnoise_{}_bpd[{:.3f}].png'.format(args.problem, batch_id, bpd)))
+
+        utils.save_image(noise * 1e3,
+                         os.path.join(save_dir, 'pixelcnn_{}_randnoise_{}.png'.format(args.problem, batch_id)),
+                         range=(-1, 1), normalize=True)
+
+        mask_noise = eps * mask.float() * torch.randn(x.size()).to(args.device)
+        x_mask_perturb = x + mask_noise
+        bpd = f(x_mask_perturb)
+        print('masked noise bpd: {:.3f}'.format(bpd))
+        utils.save_image(rescaling_inv(x),
+                         os.path.join(save_dir,
+                                      'pixelcnn_{}_randnoise_mask{}_bpd[{:.3f}].png'.format(args.problem, batch_id,
+                                                                                            bpd)))
+
+        utils.save_image(mask_noise * 1e3,
+                         os.path.join(save_dir, 'pixelcnn_{}_randnoise_mask{}.png'.format(args.problem, batch_id)),
+                         range=(-1, 1), normalize=True)
 
 
 def gradient_attack(model, args):
@@ -297,8 +369,6 @@ def gradient_attack(model, args):
                          os.path.join(save_dir,
                                       'pixelcnn_{}_randnoise_{}_bpd[{:.3f}].png'.format(args.problem, batch_id, bpd)))
 
-
-
         x = x_original
         x = x + step * mask.float() * torch.randn(x_grad.size()).to(args.device)   # random noise
         bpd, x_grad = f(x)
@@ -349,10 +419,12 @@ if __name__ == '__main__':
 
     parser.add_argument("--n_classes", type=int,
                         default=10, help="number of classes of dataset.")
+    parser.add_argument("--image_size", type=int,
+                        default=32, help="Image size")
 
     parser.add_argument("--translation_attack", action="store_true",
                         help="perform translation attack")
-    parser.add_argument("--gradient_attack", action="store_true",
+    parser.add_argument("--perturbation_attack", action="store_true",
                         help="perform gradient attack")
 
     args = parser.parse_args()
@@ -366,7 +438,9 @@ if __name__ == '__main__':
     args.device = torch.device("cuda" if use_cuda else "cpu")
 
     args.sample_batch_size = 25
-    args.obs = (1, 28, 28) if args.problem == 'mnist' or args.problem == 'fashion' else (3, 32, 32)
+    args.obs = (1, args.image_size, args.image_size) if args.problem == 'mnist' or args.problem == 'fashion' \
+        else (3, args.image_size, args.image_size)
+
     input_channels = args.obs[0]
 
     model = PixelCNN(nr_resnet=args.nr_resnet, nr_filters=args.nr_filters,
@@ -375,8 +449,8 @@ if __name__ == '__main__':
 
     if args.translation_attack:
         translation_attack(model, args)
-    elif args.gradient_attack:
-        gradient_attack(model, args)
+    elif args.perturbation_attack:
+        perturbation_attack(model, args)
     else:
         train(model, args)
 

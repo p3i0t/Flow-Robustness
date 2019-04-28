@@ -219,17 +219,17 @@ def translation_attack(glow, hps):
         return bits_dict
 
     with torch.no_grad():
-        # Evaluate on test set with different pixel shifts to left
-        bits_dict = {}
-        bits = eval_bits(test_loader, hps)
-        bits_dict.update(bits)
-
-        left_bits_1 = eval_bits(test_loader, hps, left_pixel=1)
-        left_bits_2 = eval_bits(test_loader, hps, left_pixel=2)
-        bits_dict.update(left_bits_1)
-        bits_dict.update(left_bits_2)
-
-        torch.save(bits_dict, os.path.join(save_dir, 'glow_{}_bits_dict.pth'.format(hps.problem)))
+        # # Evaluate on test set with different pixel shifts to left
+        # bits_dict = {}
+        # bits = eval_bits(test_loader, hps)
+        # bits_dict.update(bits)
+        #/
+        # left_bits_1 = eval_bits(test_loader, hps, left_pixel=1)
+        # left_bits_2 = eval_bits(test_loader, hps, left_pixel=2)
+        # bits_dict.update(left_bits_1)
+        # bits_dict.update(left_bits_2)
+        #
+        # torch.save(bits_dict, os.path.join(save_dir, 'glow_{}_bits_dict.pth'.format(hps.problem)))
 
         # Generate some samples.
         test_loader = DataLoader(dataset=test_set, batch_size=1, shuffle=False)
@@ -609,7 +609,7 @@ if __name__ == "__main__":
                         help="Learn spatial prior")
     parser.add_argument("--ycond", action="store_true",
                         help="Use y conditioning")
-    parser.add_argument("--seed", type=int, default=0, help="Random seed")
+    parser.add_argument("--seed", type=int, default=123, help="Random seed")
     parser.add_argument("--permutation", type=str, default='conv1x1',
                         help="Type of flow. 0=reverse (realnvp), 1=shuffle, 2=invconv (ours)")
     parser.add_argument("--coupling", type=str, default='affine',
