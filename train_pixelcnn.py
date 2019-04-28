@@ -290,15 +290,22 @@ def gradient_attack(model, args):
                                 'pixelcnn_{}_mask{}_bpd[{:.3f}].png'.format(args.problem, batch_id, bpd)))
 
         x = x_original
-        x = x + step * mask.float() * torch.randn(x_grad.size())   # random noise
+        x = x + step * torch.randn(x_grad.size()).to(args.device)   # random noise
+        bpd, x_grad = f(x)
+        print('gradient bpd: {:.4f}'.format(bpd))
+        utils.save_image(rescaling_inv(x),
+                         os.path.join(save_dir,
+                                      'pixelcnn_{}_randnoise_{}_bpd[{:.3f}].png'.format(args.problem, batch_id, bpd)))
+
+
+
+        x = x_original
+        x = x + step * mask.float() * torch.randn(x_grad.size()).to(args.device)   # random noise
         bpd, x_grad = f(x)
         print('gradient bpd: {:.4f}'.format(bpd))
         utils.save_image(rescaling_inv(x),
                          os.path.join(save_dir,
                                       'pixelcnn_{}_randnoise_mask{}_bpd[{:.3f}].png'.format(args.problem, batch_id, bpd)))
-
-
-
         # diff = x - x_original
         # diff *= 1000
         # utils.save_image(diff,
@@ -321,11 +328,11 @@ if __name__ == '__main__':
                         help='Every how many epochs to write checkpoint/samples?')
 
     # model
-    parser.add_argument('--nr_resnet', type=int, default=1,
+    parser.add_argument('--nr_resnet', type=int, default=2,
                         help='Number of residual blocks per stage of the model')
-    parser.add_argument('--nr_filters', type=int, default=20,
+    parser.add_argument('--nr_filters', type=int, default=60,
                         help='Number of filters to use across the model. Higher = larger model.')
-    parser.add_argument('--nr_logistic_mix', type=int, default=2,
+    parser.add_argument('--nr_logistic_mix', type=int, default=3,
                         help='Number of logistic components in the mixture. Higher = more flexible model')
     parser.add_argument('--lr', type=float,
                         default=0.0002, help='Base learning rate')
