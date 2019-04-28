@@ -400,7 +400,7 @@ if __name__ == '__main__':
     # model
     parser.add_argument('--nr_resnet', type=int, default=2,
                         help='Number of residual blocks per stage of the model')
-    parser.add_argument('--nr_filters', type=int, default=60,
+    parser.add_argument('--nr_filters', type=int, default=100,
                         help='Number of filters to use across the model. Higher = larger model.')
     parser.add_argument('--nr_logistic_mix', type=int, default=3,
                         help='Number of logistic components in the mixture. Higher = more flexible model')
@@ -408,10 +408,10 @@ if __name__ == '__main__':
                         default=0.0002, help='Base learning rate')
     parser.add_argument('--lr_decay', type=float, default=0.999995,
                         help='Learning rate decay, applied every step of the optimization')
-    parser.add_argument('--batch_size', type=int, default=100,
+    parser.add_argument('--batch_size', type=int, default=50,
                         help='Batch size during training per GPU')
     parser.add_argument('--epochs', type=int,
-                        default=10, help='How many epochs to run in total?')
+                        default=20, help='How many epochs to run in total?')
     parser.add_argument('--seed', type=int, default=123,
                         help='Random seed to use')
     parser.add_argument('--no-cuda', action='store_true', default=False,
