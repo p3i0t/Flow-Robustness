@@ -36,7 +36,7 @@ def sample(model, args):
 
 
 def train(model, args):
-    model_name = 'pixelcnn_{}'.format(args.problem)
+    model_name = 'pixelcnn_{}_{}'.format(args.problem, args.image_size)
 
     train_set, test_set, loss_op, sample_op = get_dataset_ops(args)
     train_loader = DataLoader(dataset=train_set, batch_size=args.batch_size, shuffle=True)
@@ -97,7 +97,7 @@ def train(model, args):
 
 
 def get_dataset_ops(args):
-    ds_transforms = transforms.Compose([transforms.Resize((32, 32)),
+    ds_transforms = transforms.Compose([transforms.Resize((args.image_size, args.image_size)),
                                         transforms.ToTensor(),
                                         rescaling])
 
@@ -127,7 +127,7 @@ def translation_attack(model, args):
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    model_name = 'pixelcnn_{}'.format(args.problem)
+    model_name = 'pixelcnn_{}_{}'.format(args.problem, args.image_size)
 
     args.batch_size = 1
     train_set, test_set, loss_op, sample_op = get_dataset_ops(args)
@@ -220,7 +220,7 @@ def perturbation_attack(model, args):
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    model_name = 'pixelcnn_{}'.format(args.problem)
+    model_name = 'pixelcnn_{}_{}'.format(args.problem, args.image_size)
 
     args.batch_size = 1
     train_set, test_set, loss_op, sample_op = get_dataset_ops(args)
@@ -290,7 +290,7 @@ def gradient_attack(model, args):
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    model_name = 'pixelcnn_{}'.format(args.problem)
+    model_name = 'pixelcnn_{}_{}'.format(args.problem, args.image_size)
     check_point = torch.load(os.path.join(args.log_dir, '{}.pth'.format(model_name)),
                              map_location=lambda storage, loc: storage)
     model.load_state_dict(check_point['state_dict'])
