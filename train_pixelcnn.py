@@ -180,16 +180,16 @@ def translation_attack(model, args):
 
     with torch.no_grad():
         # Evaluate on test set with different pixel shifts to left
-        bits_dict = {}
-        bits = eval_bits(test_loader, args)
-        bits_dict.update(bits)
+        #bits_dict = {}
+        #bits = eval_bits(test_loader, args)
+        #bits_dict.update(bits)
 
-        left_bits_1 = eval_bits(test_loader, args, left_pixel=1)
-        left_bits_2 = eval_bits(test_loader, args, left_pixel=2)
-        bits_dict.update(left_bits_1)
-        bits_dict.update(left_bits_2)
+        #left_bits_1 = eval_bits(test_loader, args, left_pixel=1)
+        #left_bits_2 = eval_bits(test_loader, args, left_pixel=2)
+        #bits_dict.update(left_bits_1)
+        #bits_dict.update(left_bits_2)
 
-        torch.save(bits_dict, os.path.join(save_dir, 'pcnn_{}_bits_dict.pth'.format(args.problem)))
+        #torch.save(bits_dict, os.path.join(save_dir, 'pcnn_{}_bits_dict.pth'.format(args.problem)))
 
         n_samples = 2
 

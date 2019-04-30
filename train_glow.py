@@ -211,25 +211,25 @@ def translation_attack(glow, hps):
             y = y.to(hps.device)
             if left_pixel:
                 x = left_shift(x, left_pixel)
-                if hps.problem == 'mnist':
-                    x = up_shift(x, left_pixel)
+                #if hps.problem == 'mnist':
+                #    x = up_shift(x, left_pixel)
             bits_x, _ = f(x, y)
             for i in range(hps.n_classes):
                 bits_dict['{}_class{}_leftpixel{}'.format(hps.problem, i, pix)] += list(bits_x[y == i].cpu().numpy())
         return bits_dict
 
     with torch.no_grad():
-        # # Evaluate on test set with different pixel shifts to left
-        # bits_dict = {}
-        # bits = eval_bits(test_loader, hps)
-        # bits_dict.update(bits)
-        #/
-        # left_bits_1 = eval_bits(test_loader, hps, left_pixel=1)
-        # left_bits_2 = eval_bits(test_loader, hps, left_pixel=2)
-        # bits_dict.update(left_bits_1)
-        # bits_dict.update(left_bits_2)
-        #
-        # torch.save(bits_dict, os.path.join(save_dir, 'glow_{}_bits_dict.pth'.format(hps.problem)))
+        # Evaluate on test set with different pixel shifts to left
+        bits_dict = {}
+        bits = eval_bits(test_loader, hps)
+        bits_dict.update(bits)
+        
+        left_bits_1 = eval_bits(test_loader, hps, left_pixel=1)
+        left_bits_2 = eval_bits(test_loader, hps, left_pixel=2)
+        bits_dict.update(left_bits_1)
+        bits_dict.update(left_bits_2)
+        
+        torch.save(bits_dict, os.path.join(save_dir, '{}_glow_{}_bits_dict.pth'.format(hps.coupling, hps.problem)))
 
         # Generate some samples.
         test_loader = DataLoader(dataset=test_set, batch_size=1, shuffle=False)
@@ -246,15 +246,15 @@ def translation_attack(glow, hps):
                 hps.problem, sample_id, bits_x.cpu().item())))
 
             x = left_shift(x, n_pixel=1)
-            if hps.problem == 'mnist':
-                x = up_shift(x, n_pixel=1)
+            #if hps.problem == 'mnist':
+            #    x = up_shift(x, n_pixel=1)
             bits_x, _ = f(x, y)
             save_image(postprocess(x), os.path.join(save_dir, '{}_l1_{}_bpd[{:.4f}].png'.format(
                 hps.problem, sample_id, bits_x.cpu().item())))
 
             x = left_shift(x, n_pixel=1)
-            if hps.problem == 'mnist':
-                x = up_shift(x, n_pixel=1)
+            #if hps.problem == 'mnist':
+            #    x = up_shift(x, n_pixel=1)
             bits_x, _ = f(x, y)
             save_image(postprocess(x), os.path.join(save_dir, '{}_l2_{}_bpd[{:.4f}].png'.format(
                 hps.problem, sample_id, bits_x.cpu().item())))
@@ -327,9 +327,9 @@ def reverse_attack(glow, hps):
         return bits_dict
 
     with torch.no_grad():
-        # bits_dict = eval_bits(test_loader, hps)
-        # torch.save(bits_dict, os.path.join(save_dir, 'glow_{}_bits_dict.pth'.format(hps.problem)))
-
+        bits_dict = eval_bits(test_loader, hps)
+        torch.save(bits_dict, os.path.join(save_dir, '{}_glow_{}_bits_dict.pth'.format(hps.coupling, hps.problem)))
+        exit(0)
         test_loader = DataLoader(dataset=test_set, batch_size=1, shuffle=False)
 
         n_samples = 5
