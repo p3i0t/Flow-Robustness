@@ -53,8 +53,9 @@ def get_dataset_ops(args):
 
 
 def plot_quality_image(x, file_name):
+    return
     trans = transforms.ToPILImage(mode='L')
-    plt.imshow(trans(x[0]))
+    plt.imshow(trans(x[0].cpu()))
 
     plt.tight_layout()
     plt.gca().xaxis.set_ticks([])
@@ -96,7 +97,7 @@ def pixelcnn_translation_attack(pixel_cnn, args):
     args.image_size = 28
     args.obs = (1, args.image_size, args.image_size)
     test_set, loss_op, sample_op = get_dataset_ops(args)
-    test_loader = DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=True)  # batch size fixed to 1
+    test_loader = DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=False)  # batch size fixed to 1
 
     # wrapper function of PixelCNN
     def pixel_cnn_f(x):
