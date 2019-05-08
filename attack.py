@@ -151,7 +151,7 @@ def glow_translation_attack(glow, args):
     args.batch_size = 1
     args.image_size = 32
     test_set, loss_op, sample_op = get_dataset_ops(args)
-    test_loader = DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=True)  # batch size fixed to 1
+    test_loader = DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=False)  # batch size fixed to 1
 
     # wrapper function of Glow
     def glow_f(x, y):

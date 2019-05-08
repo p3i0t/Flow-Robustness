@@ -191,7 +191,7 @@ def translation_attack(model, args):
 
         #torch.save(bits_dict, os.path.join(save_dir, 'pcnn_{}_bits_dict.pth'.format(args.problem)))
 
-        n_samples = 2
+        n_samples = 3
 
         for sample_id, (x, y) in enumerate(test_loader):
             if sample_id == n_samples:
