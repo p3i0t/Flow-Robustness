@@ -1,3 +1,4 @@
+import sys
 import torch
 import torch.nn as nn
 
@@ -22,9 +23,9 @@ class Glow(nn.Module):
                 self.layers.append(Split2d(C))
                 C = C//2  # half is factored out
             else:
-                self.layers.append(FinalPrior(C, hps.learn_top, hps.ycond))
+                self.layers.append(FinalPrior(C, hps.learn_top))
 
-    def forward(self, x, logdet, y_onehot=None):
+    def forward(self, x, logdet):
         z = x
         eps_list = []  # keep the gaussianized eps list
         for layer in self.layers:
@@ -32,7 +33,7 @@ class Glow(nn.Module):
                 z, logdet, eps = layer(z, logdet)
                 eps_list.append(eps)
             elif isinstance(layer, FinalPrior):
-                z, logdet, eps = layer(z, logdet, y_onehot)
+                z, logdet, eps = layer(z, logdet)
                 eps_list.append(eps)
             else:
                 z, logdet = layer(z, logdet)
