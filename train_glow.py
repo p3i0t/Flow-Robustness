@@ -94,9 +94,9 @@ def train(glow, optimizer, hps):
             bits_list.append(mean_bits_x.cpu().item())
 
         # sampling images.
-        save_image(postprocess(x), os.path.join(hps.log_dir, 'glow_epoch{}_original.png'.format(epoch)))
+        save_image(postprocess(x), os.path.join(hps.log_dir, 'uglow_epoch{}_original.png'.format(epoch)))
         x_reverse = glow.reverse(eps_list, y)
-        save_image(postprocess(x_reverse), os.path.join(hps.log_dir, 'glow_epoch{}_reverse.png'.format(epoch)))
+        save_image(postprocess(x_reverse), os.path.join(hps.log_dir, 'uglow_epoch{}_reverse.png'.format(epoch)))
 
         temperatures = [0., 0.25, 0.5, 0.6, 0.7, 0.8, 0.9, 1.]
 
@@ -116,7 +116,7 @@ def train(glow, optimizer, hps):
                           }
             suffix = '' if hps.class_id == -1 else '_{}'.format(hps.class_id)
             torch.save(checkpoint,
-                       os.path.join(hps.log_dir, '{}_glow_{}{}.pth'.format(hps.coupling, hps.problem, suffix)))
+                       os.path.join(hps.log_dir, '{}_uglow_{}{}.pth'.format(hps.coupling, hps.problem, suffix)))
             print('==> New optimal model saved !!!')
 
 
