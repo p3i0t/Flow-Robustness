@@ -191,7 +191,7 @@ def train_classifier(classifier, hps):
     print('Test acc: {:.4f}'.format(np.mean(acc_list)))
 
     torch.save(classifier.state_dict(), os.path.join(hps.log_dir, 'classifier_{}.pth'.format(hps.problem)))
-    
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
