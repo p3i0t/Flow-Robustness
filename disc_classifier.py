@@ -11,6 +11,7 @@ from torch.optim import Adam
 import argparse
 import os
 import numpy as np
+from NormalizingFlows import Glow, ConGlow
 
 
 def preprocess(x):
@@ -193,6 +194,94 @@ def train_classifier(classifier, hps):
     torch.save(classifier.state_dict(), os.path.join(hps.log_dir, 'classifier_{}.pth'.format(hps.problem)))
 
 
+def eval_classifier(classifier, hps):
+    dataset = get_dataset(dataset=hps.problem, train=False, class_id=hps.class_id)
+    test_loader = DataLoader(dataset=dataset, batch_size=hps.n_batch_test, shuffle=True)
+
+    path = os.path.join(hps.log_dir, 'classifier_{}.pth'.format(hps.problem))
+    classifier.load_state_dict(torch.load(path))
+
+    def left_shift(x, n_pixel=1):
+        return torch.cat([x[:, :, :, n_pixel:], x[:, :, :, :n_pixel]], dim=-1)
+
+    classifier.eval()
+    acc_list = []
+    for batch_id, (x, y) in enumerate(test_loader):
+        x = preprocess(x).to(hps.device)
+        x = left_shift(x)
+        y = y.to(hps.device)
+
+        logits = classifier(x)
+        acc = (torch.argmax(logits, dim=-1) == y).float().mean().item()
+        acc_list.append(acc)
+    print('1-pixel left shift, Test acc: {:.4f}'.format(np.mean(acc_list)))
+
+    acc_list = []
+    eps = 0.001
+    for batch_id, (x, y) in enumerate(test_loader):
+        x = preprocess(x).to(hps.device)
+        x = x + eps * torch.randn(x.size()).to(hps.device)
+        y = y.to(hps.device)
+
+        logits = classifier(x)
+        acc = (torch.argmax(logits, dim=-1) == y).float().mean().item()
+        acc_list.append(acc)
+    print('Gaussian Noises, Test acc: {:.4f}'.format(np.mean(acc_list)))
+
+    glow = ConGlow(hps).to(hps.device)
+
+    suffix = '' if hps.class_id == -1 else '_{}'.format(hps.class_id)
+    checkpoint = torch.load(os.path.join(hps.log_dir, '{}_glow_{}{}.pth'.format(hps.coupling, hps.problem, suffix))
+                            , map_location=lambda storage, loc: storage)
+    glow.load_state_dict(checkpoint['model_state'])
+    glow.eval()
+
+    def f(x, y):
+        loglikelihood = torch.zeros(x.size(0)).to(hps.device)
+
+        n_pixels = np.prod(x.size()[1:])
+        loglikelihood += -np.log(hps.n_bins) * n_pixels
+        z, loglikelihood, eps_list = glow(x, loglikelihood, y)
+
+        bits_x = (- loglikelihood) / (np.log(2.) * n_pixels)  # bits per pixel
+        return bits_x, eps_list
+
+    def zero_epses(eps_list, n_zeros=1):
+        "Zero the preceding n_zeros eps factors. "
+        assert n_zeros <= len(eps_list)
+        for idx in range(n_zeros):
+            eps_list[idx].zero_()
+        return eps_list
+
+    acc_list = []
+    for batch_id, (x, y) in enumerate(test_loader):
+        x = preprocess(x).to(hps.device)
+        bits, eps_list = f(x, y)
+        zeroed_eps_list = zero_epses(eps_list, n_zeros=1)
+        x_reverse = glow.reverse(zeroed_eps_list, y)
+
+        y = y.to(hps.device)
+
+        logits = classifier(x_reverse)
+        acc = (torch.argmax(logits, dim=-1) == y).float().mean().item()
+        acc_list.append(acc)
+    print('Zeroing <1, Test acc: {:.4f}'.format(np.mean(acc_list)))
+
+    acc_list = []
+    for batch_id, (x, y) in enumerate(test_loader):
+        x = preprocess(x).to(hps.device)
+        bits, eps_list = f(x, y)
+        zeroed_eps_list = zero_epses(eps_list, n_zeros=2)
+        x_reverse = glow.reverse(zeroed_eps_list, y)
+
+        y = y.to(hps.device)
+
+        logits = classifier(x_reverse)
+        acc = (torch.argmax(logits, dim=-1) == y).float().mean().item()
+        acc_list.append(acc)
+    print('Zeroing <2, Test acc: {:.4f}'.format(np.mean(acc_list)))
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--verbose", action='store_true', help="Verbose mode")
@@ -278,6 +367,8 @@ if __name__ == '__main__':
     hps.device = torch.device("cuda" if use_cuda else "cpu")
     hps.n_bins = 2. ** hps.n_bits_x  # number of pixel levels
 
+    hps.in_channels = 1 if hps.problem == 'mnist' or hps.problem == 'fashion' else 3
+    hps.hidden_channels = hps.width
 
     m = build_resnet_32x32(image_channel=1).to(hps.device)
     train_classifier(m, hps) 
