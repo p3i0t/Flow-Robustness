@@ -95,14 +95,14 @@ def train(glow, optimizer, hps):
 
         # sampling images.
         save_image(postprocess(x), os.path.join(hps.log_dir, 'uglow_epoch{}_original.png'.format(epoch)))
-        x_reverse = glow.reverse(eps_list, y)
+        x_reverse = glow.reverse(eps_list)
         save_image(postprocess(x_reverse), os.path.join(hps.log_dir, 'uglow_epoch{}_reverse.png'.format(epoch)))
 
         temperatures = [0., 0.25, 0.5, 0.6, 0.7, 0.8, 0.9, 1.]
 
-        sample_labels = torch.arange(0, 100).long().to(hps.device) / 10
+        #sample_labels = torch.arange(0, 100).long().to(hps.device) / 10
         for temp_id, temp in enumerate(temperatures):
-            sample = glow.sample(sample_labels, temp)
+            sample = glow.sample(temp)
             save_image(postprocess(sample), os.path.join(hps.log_dir, 'epoch{}_sample_{}.png'.format(epoch, temp_id)))
 
         cur_bits_per_dim = np.mean(bits_list)

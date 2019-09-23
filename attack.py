@@ -275,7 +275,8 @@ def perturbation_attack(pixel_cnn, glow, args):
 
         # Add random gaussian noise
         eps = 1e-3
-        noise = eps * torch.randn(x.size()).to(args.device)
+        noise = eps * torch.randn(x.size()).to(args.device) + 1. / 256
+        noise.clamp_(min=0.)
         pixelcnn_x_perturb = rescaling(x) + noise
 
         pixel_cnn_bpd = pixel_cnn_f(pixelcnn_x_perturb)
@@ -290,6 +291,7 @@ def perturbation_attack(pixel_cnn, glow, args):
 
         # Add masked random gaussian noise
         mask_noise = eps * mask.float() * torch.randn(x.size()).to(args.device)
+        mask_noise.clamp_(min=0.)
         pixelcnn_mask_x_perturb = rescaling(x) + mask_noise
         pixel_cnn_bpd = pixel_cnn_f(pixelcnn_mask_x_perturb)
         glow_bpd = glow_f(preprocess(x) + mask_noise, y)

@@ -40,6 +40,11 @@ def get_dataset(dataset='mnist', train=True, class_id=None):
                                             transforms.Resize((32, 32)),
                                             transforms.ToTensor(),
                                         ]))
+    elif dataset == 'cifar10':
+        dataset = datasets.CIFAR10('data/CIFAR10', train=train, download=True,
+                                        transform=transforms.Compose([
+                                            transforms.ToTensor(),
+                                        ]))
     else:
         print('dataset {} is not available'.format(dataset))
 
