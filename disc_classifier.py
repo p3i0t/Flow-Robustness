@@ -158,10 +158,10 @@ def build_resnet_32x32(n=8, fc_size=10, image_channel=3):
 
 
 def train_classifier(classifier, hps):
-    dataset = get_dataset(dataset=hps.problem, train=True)
+    dataset = get_dataset(dataset=hps.problem, train=True, class_id=hps.class_id)
     train_loader = DataLoader(dataset=dataset, batch_size=hps.n_batch_train, shuffle=True)
 
-    dataset = get_dataset(dataset=hps.problem, train=False)
+    dataset = get_dataset(dataset=hps.problem, train=False, class_id=hps.class_id)
     test_loader = DataLoader(dataset=dataset, batch_size=hps.n_batch_test, shuffle=True)
 
     optimizer = Adam(classifier.parameters(), lr=0.001)
@@ -186,7 +186,7 @@ def train_classifier(classifier, hps):
         y = y.to(hps.device)
 
         logits = classifier(x)
-        acc = (torch.argmax(logits, dim=-1) == y).float().mean()
+        acc = (torch.argmax(logits, dim=-1) == y).float().mean().item()
         acc_list.append(acc)
     print('Test acc: {:.4f}'.format(np.mean(acc_list)))
 
@@ -279,5 +279,5 @@ if __name__ == '__main__':
     hps.n_bins = 2. ** hps.n_bits_x  # number of pixel levels
 
 
-    m = build_resnet_32x32()
-    print(m)
+    m = build_resnet_32x32(image_channel=1).to(hps.device)
+    train_classifier(m, hps) 
